@@ -19,7 +19,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'theme.dart';
-import 'terminal_shell.dart';
+import 'home_shell.dart';
 
 Future<void> main() async {
   // Must run before anything touching platform channels, MediaQuery, or
@@ -62,7 +62,7 @@ class RedLineApp extends StatelessWidget {
       title: 'RedLine',
       debugShowCheckedModeBanner: false,
       theme: buildRedLineTheme(),
-      home: const TerminalShell(),
+      home: const HomeShell(),
     );
   }
 }
