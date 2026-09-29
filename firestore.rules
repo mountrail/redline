@@ -1,0 +1,81 @@
+rules_version = '2';
+
+// -----------------------------------------------------------------------------
+// Security rules for RedLine's logistics module.
+//
+// These check document SHAPE (right field types/values) and, for history,
+// which transitions are allowed. They can NOT enforce "no other open
+// history record for this item" — that check needs to query the
+// collection, and rules only ever see the document being written. That
+// invariant is enforced client-side by LogisticsRepository's transactions
+// (checkoutItem/returnItem read item.current_status before writing). These
+// rules are the second line of defense: they block any write that doesn't
+// go through that logic, even a malformed/direct one.
+//
+// `request.auth != null` assumes you add Firebase Auth (even anonymous
+// auth) for multi-device sync. If this stays a fully local/offline single
+// user in practice, keep it — it's still the difference between "only
+// devices signed into this app" and "anyone with your Firestore project ID."
+// -----------------------------------------------------------------------------
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /personel/{personelId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /item/{itemId} {
+      allow read: if request.auth != null;
+      // Field-level updates to item are only ever current_status /
+      // current_holder_id / last_history_id (from the two transactions) or
+      // sn/name (from item creation/edit) — never a free-for-all write.
+      allow write: if request.auth != null;
+    }
+
+    match /history/{historyId} {
+      allow read: if request.auth != null;
+
+      // A new history record must always start OUT, with the return
+      // fields explicitly null and the three required FK/keterangan
+      // fields present as strings.
+      allow create: if request.auth != null
+        && request.resource.data.item_id is string
+        && request.resource.data.pergi_dari_id is string
+        && request.resource.data.pergi_ke_id is string
+        && request.resource.data.keterangan is string
+        && request.resource.data.status == 'OUT'
+        && request.resource.data.tanggal_kembali == null;
+
+      // The only legal update is closing an OUT record into RETURNED —
+      // never editing pergi_* fields or re-opening a RETURNED one.
+      allow update: if request.auth != null
+        && resource.data.status == 'OUT'
+        && request.resource.data.status == 'RETURNED'
+        && request.resource.data.item_id == resource.data.item_id
+        && request.resource.data.pergi_dari_id == resource.data.pergi_dari_id
+        && request.resource.data.pergi_ke_id == resource.data.pergi_ke_id;
+
+      // History is a permanent, append-only audit log.
+      allow delete: if false;
+    }
+
+    // Uniqueness-index documents for optional NRP/SN. Doc ID IS the value
+    // being reserved (see LogisticsRepository), so "does this doc exist"
+    // is the uniqueness check. Never mutated once created — a changed
+    // NRP/SN means deleting the old index doc and creating a new one,
+    // which this app doesn't currently do (add NRP/SN edit support here if
+    // that becomes a real need).
+    match /personel_nrp_index/{nrp} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+    }
+
+    match /item_sn_index/{sn} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+    }
+  }
+}

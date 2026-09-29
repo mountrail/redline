@@ -7,11 +7,17 @@
 
 import 'package:flutter/material.dart';
 
+import 'screens/logistics_screen.dart';
 import 'theme.dart';
 
 /// Static module list. Numbers are cosmetic (ctOS-style indexing), not IDs —
 /// kept as a const list so this never gets rebuilt or reallocated.
+///
+/// 'LOGISTICS' is the one entry with a real screen behind it (see
+/// _ModuleRow._open below) — everything else still opens the generic
+/// placeholder until it's built out.
 const List<String> kModules = [
+  'LOGISTICS',
   'NETWORK',
   'DNS',
   'HTTP',
@@ -90,6 +96,13 @@ class _ModuleRow extends StatelessWidget {
     // shoving the whole layout up. Clearing focus before navigating means
     // there's nothing left for the Navigator to restore on return.
     FocusScope.of(context).unfocus();
+
+    if (label == 'LOGISTICS') {
+      Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const LogisticsScreen()));
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ModulePlaceholderScreen(moduleName: label),

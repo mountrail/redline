@@ -3,9 +3,15 @@
 // RedLine entrypoint.
 //
 // Cold-start budget notes:
-//  - WidgetsFlutterBinding is initialized explicitly and first, before any
-//    other work, since font loading and platform channel calls both need a
-//    live binding.
+//  - WidgetsFlutterBinding is initialized explicitly and first, since font
+//    loading, platform channel calls, AND Hive's local storage init all
+//    need a live binding.
+//  - Local-first: LocalStore.init() opens the on-disk Hive boxes the
+//    logistics module reads/writes. No network, no Firebase — the app is
+//    fully usable offline from the first frame. When a Firebase sync layer
+//    is added later (see local_store.dart), Firebase.initializeApp() and
+//    an auth step would go here ALONGSIDE this call, not instead of it —
+//    LocalStore stays the source of truth either way, like Google Keep.
 //  - Font *geometry* (glyph metrics) is warmed via a zero-size offstage
 //    TextPainter.layout() call before runApp(): this forces Skia/Impeller to
 //    resolve and cache the Consolas glyph atlas for the sizes we use, so the
@@ -18,6 +24,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+
+import 'services/local_store.dart';
 import 'theme.dart';
 import 'home_shell.dart';
 
@@ -25,6 +33,10 @@ Future<void> main() async {
   // Must run before anything touching platform channels, MediaQuery, or
   // text layout.
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Opens the local Hive boxes. Must complete before any screen tries to
+  // read/write logistics data.
+  await LocalStore.instance.init();
 
   // Pre-warm the Consolas glyph atlas at the sizes actually used by the UI
   // (see theme.dart / terminal_shell.dart: 13, 14, and 16 are the only sizes
@@ -66,65 +78,3 @@ class RedLineApp extends StatelessWidget {
     );
   }
 }
-
-// -----------------------------------------------------------------------------
-// NATIVE ANDROID COLD-START CONFIG (apply these alongside the Dart code above)
-// -----------------------------------------------------------------------------
-//
-// Flutter's default launch theme briefly shows a white window before the
-// first Flutter frame paints. Fix this at the native layer so the *very
-// first* pixel the OS composites is already pure black:
-//
-// 1) android/app/src/main/res/drawable/launch_background.xml
-//    Replace the default `<item android:drawable="@android:color/white" />`
-//    (or the branding layer-list) with a flat black background:
-//
-//      <?xml version="1.0" encoding="utf-8"?>
-//      <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-//          <item android:drawable="@android:color/black" />
-//      </layer-list>
-//
-//    Do this for BOTH:
-//      android/app/src/main/res/drawable/launch_background.xml
-//      android/app/src/main/res/drawable-v21/launch_background.xml
-//
-// 2) android/app/src/main/res/values/styles.xml (and values-night/styles.xml)
-//    Ensure both the LaunchTheme and NormalTheme set a black window
-//    background so there's no flash between the launch screen and the
-//    first Flutter-drawn frame:
-//
-//      <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-//          <item name="android:windowBackground">@drawable/launch_background</item>
-//          <item name="android:windowFullscreen">false</item>
-//      </style>
-//
-//      <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-//          <item name="android:windowBackground">@android:color/black</item>
-//      </style>
-//
-// 3) android/app/src/main/AndroidManifest.xml
-//    Confirm the launching activity references LaunchTheme:
-//
-//      <activity
-//          android:name=".MainActivity"
-//          android:theme="@style/LaunchTheme"
-//          ...>
-//
-// 4) android/app/build.gradle
-//    For release builds, enable R8/minification and resource shrinking so
-//    the APK stays small and class-loading at cold start stays fast:
-//
-//      buildTypes {
-//          release {
-//              minifyEnabled true
-//              shrinkResources true
-//              proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-//          }
-//      }
-//
-// 5) pubspec.yaml — keep dependencies minimal. This app intentionally uses
-//    ONLY the Flutter SDK (material, services, rendering) — no google_fonts,
-//    no animation/Lottie/Rive packages, no state-management framework. Every
-//    added package is extra class-loading and extra APK size on the critical
-//    cold-start path.
-// -----------------------------------------------------------------------------

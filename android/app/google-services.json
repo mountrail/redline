@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "215303981395",
+    "project_id": "redline-gunn",
+    "storage_bucket": "redline-gunn.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:215303981395:android:65379d7aae5b972fb779a6",
+        "android_client_info": {
+          "package_name": "com.yourname.redline"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA1MtiSTMwtawGZvGODmYvEjKe1QuTJr_o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
