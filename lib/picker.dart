@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'lang.dart';
 import 'theme.dart';
 
 Widget searchField(ValueChanged<String> onChanged, {bool autofocus = false}) =>
@@ -9,10 +10,10 @@ Widget searchField(ValueChanged<String> onChanged, {bool autofocus = false}) =>
         autofocus: autofocus,
         onChanged: onChanged,
         cursorColor: kRed,
-        decoration: const InputDecoration(
-          hintText: 'SEARCH...',
-          prefixIcon: Icon(Icons.search, color: kDim),
-          border: OutlineInputBorder(borderSide: BorderSide(color: kDim)),
+        decoration: InputDecoration(
+          hintText: tr('SEARCH...'),
+          prefixIcon: const Icon(Icons.search, color: kDim),
+          border: const OutlineInputBorder(borderSide: BorderSide(color: kDim)),
           isDense: true,
         ),
       ),
@@ -25,14 +26,14 @@ Widget actionButtons({VoidCallback? onEdit, VoidCallback? onDelete}) => Row(
     if (onEdit != null)
       IconButton(
         icon: const Icon(Icons.edit, size: 20),
-        tooltip: 'Edit',
+        tooltip: tr('Edit'),
         visualDensity: VisualDensity.compact,
         onPressed: onEdit,
       ),
     if (onDelete != null)
       IconButton(
         icon: const Icon(Icons.delete_outline, size: 22, color: kRed),
-        tooltip: 'Delete',
+        tooltip: tr('Delete'),
         visualDensity: VisualDensity.compact,
         onPressed: onDelete,
       ),
@@ -48,16 +49,16 @@ Future<bool> confirmDelete(
   final ok = await showDialog<bool>(
     context: c,
     builder: (ctx) => AlertDialog(
-      title: const Text('DELETE?'),
+      title: Text(tr('DELETE?')),
       content: Text(warning == null ? message : '$message\n\n$warning'),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('CANCEL'),
+          child: Text(tr('CANCEL')),
         ),
         TextButton(
           onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('DELETE'),
+          child: Text(tr('DELETE')),
         ),
       ],
     ),
@@ -107,7 +108,7 @@ class _SearchPickerState extends State<SearchPicker> {
         .where((o) => '${o.$2} ${o.$3}'.toLowerCase().contains(q.toLowerCase()))
         .toList();
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
+      appBar: AppBar(title: Text(tr(widget.title))),
       body: Column(
         children: [
           searchField((v) => setState(() => _q = v), autofocus: true),
@@ -116,7 +117,7 @@ class _SearchPickerState extends State<SearchPicker> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.add),
-                  title: Text(q.isEmpty ? 'ADD NEW' : 'ADD NEW "$q"'),
+                  title: Text(q.isEmpty ? tr('ADD NEW') : '${tr('ADD NEW')} "$q"'),
                   onTap: () async {
                     final id = await widget.onAdd(context, q);
                     if (id != null && context.mounted)

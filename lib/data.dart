@@ -1,12 +1,16 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:hive_flutter/hive_flutter.dart';
+
+import 'lang.dart';
 
 /// Local storage + logistics logic. Records are plain maps.
 ///
 ///  people : name, nrp, satuan_kerja (unit), phone, photo (jpeg bytes)
 ///  types  : name, accessories [String]            e.g. HT -> Clipper, Battery
-///  units  : type_id, sn, status (IN_STORE/OUT), holder_id   one row per serial number
+///  units  : type_id, sn (nullable), no, status (IN_STORE/OUT), holder_id
+///           one row per physical unit; no = per-type number, shown as #no while sn is null
 ///  logs   : log_number, date, note, from_id, to_id, unit_ids,
 ///           lines [{type_id, type_name, unit_ids, sns, acc {name: qty}}],
 ///           back_date, back_from_id, back_to_id
@@ -29,7 +33,7 @@ class Db {
       (s == null || s.trim().isEmpty) ? null : s.trim();
 
   static String name(String? id) =>
-      id == null ? '-' : (people.get(id)?['name'] ?? '(deleted)');
+      id == null ? '-' : (people.get(id)?['name'] ?? tr('(deleted)'));
 
   // ------------------------------------------------------------ people
 
@@ -41,13 +45,13 @@ class Db {
     String? phone,
     Uint8List? photo,
   }) async {
-    if (name.trim().isEmpty) throw 'Name is required';
+    if (name.trim().isEmpty) throw tr('Name is required');
     final cleanNrp = _n(nrp);
     if (cleanNrp != null &&
         people.toMap().entries.any(
           (e) => e.key != id && e.value['nrp'] == cleanNrp,
         )) {
-      throw 'NRP is already registered';
+      throw tr('NRP is already registered');
     }
     id ??= _id();
     await people.put(id, {
@@ -81,7 +85,7 @@ class Db {
     for (final a in accessories) {
       final t = a.trim();
       if (t.isEmpty) continue;
-      if (!seen.add(t.toLowerCase())) throw 'Duplicate additional item: $t';
+      if (!seen.add(t.toLowerCase())) throw '${tr('Duplicate additional item')}: $t';
       out.add(t);
     }
     return out;
@@ -94,13 +98,13 @@ class Db {
     String? id,
   }) async {
     final n = name.trim();
-    if (n.isEmpty) throw 'Item name is required';
+    if (n.isEmpty) throw tr('Item name is required');
     final dup = types.toMap().entries.any(
       (e) =>
           e.key != id &&
           e.value['name'].toString().toLowerCase() == n.toLowerCase(),
     );
-    if (dup) throw '"$n" already exists';
+    if (dup) throw '"$n" ${tr('already exists')}';
     final acc = _cleanAcc(accessories);
     id ??= _id();
     await types.put(id, {'name': n, 'accessories': acc});
@@ -119,51 +123,87 @@ class Db {
         .where((e) => e.value['type_id'] == id)
         .toList();
     if (mine.any((e) => e.value['status'] == 'OUT')) {
-      throw 'Some units of this item are still out. Close their logs first.';
+      throw tr('Some units of this item are still out. Close their logs first.');
     }
     await units.deleteAll(mine.map((e) => e.key));
     await types.delete(id);
   }
 
-  static Future<void> addUnits(String typeId, List<String> sns) async {
+  /// Shown name of a unit: its serial number, or #no when it has none.
+  static String label(Map u) => (u['sn'] as String?) ?? '#${u['no']}';
+
+  /// Serial-numbered units first (A-Z), then #1, #2, ...
+  static int cmpUnit(Map a, Map b) {
+    final x = a['sn'] as String?, y = b['sn'] as String?;
+    if (x == null && y == null) {
+      return ((a['no'] as int?) ?? 0).compareTo((b['no'] as int?) ?? 0);
+    }
+    if (x == null) return 1;
+    if (y == null) return -1;
+    return x.compareTo(y);
+  }
+
+  static int _nextNo(String typeId) =>
+      units.values
+          .where((u) => u['type_id'] == typeId)
+          .fold<int>(0, (m, u) => max(m, (u['no'] as int?) ?? 0)) +
+      1;
+
+  /// Adds units with the given serial numbers, plus [blank] units that have
+  /// none yet (they show as #1, #2, ... and can get a serial number later).
+  static Future<void> addUnits(
+    String typeId,
+    List<String> sns, {
+    int blank = 0,
+  }) async {
     final clean = {
       for (final s in sns)
         if (s.trim().isNotEmpty) s.trim(),
     };
-    if (clean.isEmpty) throw 'Enter at least one serial number';
+    if (clean.isEmpty && blank < 1) {
+      throw tr('Enter a serial number or a quantity');
+    }
     final have = units.values
-        .where((u) => u['type_id'] == typeId)
+        .where((u) => u['type_id'] == typeId && u['sn'] != null)
         .map((u) => u['sn'].toString().toLowerCase())
         .toSet();
     final dup = clean.where((s) => have.contains(s.toLowerCase()));
-    if (dup.isNotEmpty) throw 'Already exists: ${dup.join(', ')}';
+    if (dup.isNotEmpty) throw '${tr('Already exists')}: ${dup.join(', ')}';
+    var no = _nextNo(typeId) - 1;
     var seed = DateTime.now().microsecondsSinceEpoch;
-    for (final sn in clean) {
+    for (final sn in [...clean, for (var i = 0; i < blank; i++) null]) {
       await units.put('${seed++}', {
         'type_id': typeId,
         'sn': sn,
+        'no': ++no,
         'status': 'IN_STORE',
       });
     }
   }
 
+  /// Empty [sn] clears the serial number (the unit falls back to #no).
   static Future<void> updateUnit(String id, String sn) async {
-    final s = sn.trim();
-    if (s.isEmpty) throw 'Serial number is required';
+    final s = _n(sn);
     final u = units.get(id)!;
-    final dup = units.toMap().entries.any(
-      (e) =>
-          e.key != id &&
-          e.value['type_id'] == u['type_id'] &&
-          e.value['sn'].toString().toLowerCase() == s.toLowerCase(),
-    );
-    if (dup) throw 'Already exists: $s';
-    await units.put(id, {...u, 'sn': s});
+    if (s != null &&
+        units.toMap().entries.any(
+          (e) =>
+              e.key != id &&
+              e.value['type_id'] == u['type_id'] &&
+              e.value['sn']?.toString().toLowerCase() == s.toLowerCase(),
+        )) {
+      throw '${tr('Already exists')}: $s';
+    }
+    await units.put(id, {
+      ...u,
+      'sn': s,
+      'no': u['no'] ?? _nextNo(u['type_id']),
+    });
   }
 
   static Future<void> deleteUnit(String id) async {
     if (units.get(id)?['status'] == 'OUT') {
-      throw 'This unit is out. Close its log first.';
+      throw tr('This unit is out. Close its log first.');
     }
     await units.delete(id);
   }
@@ -183,9 +223,7 @@ class Db {
               !exclude.contains(e.key),
         )
         .toList()
-      ..sort(
-        (a, b) => a.value['sn'].toString().compareTo(b.value['sn'].toString()),
-      );
+      ..sort((a, b) => cmpUnit(a.value, b.value));
   }
 
   /// "HT (2)  SN: ht001, ht002" — one line per item type.
@@ -193,7 +231,7 @@ class Db {
     final groups = <String, List<String>>{};
     for (final u in unitIds) {
       final m = units.get(u);
-      if (m != null) (groups[m['type_id']] ??= []).add(m['sn']);
+      if (m != null) (groups[m['type_id']] ??= []).add(label(m));
     }
     return [
       for (final e in groups.entries)
@@ -230,7 +268,7 @@ class Db {
           'type_id': e.key,
           'type_name': types.get(e.key)?['name'],
           'unit_ids': e.value,
-          'sns': [for (final u in e.value) units.get(u)!['sn'].toString()],
+          'sns': [for (final u in e.value) label(units.get(u)!)],
           'acc': <String, int>{},
         },
     ];
@@ -245,8 +283,9 @@ class Db {
     final snap = l['sns'] as List;
     return [
       for (var i = 0; i < ids.length; i++)
-        (units.get(ids[i])?['sn'] ?? (i < snap.length ? snap[i] : '?'))
-            .toString(),
+        units.get(ids[i]) != null
+            ? label(units.get(ids[i])!)
+            : '${i < snap.length ? snap[i] : '?'}',
     ];
   }
 
@@ -262,7 +301,7 @@ class Db {
     ];
     for (final u in all) {
       if (units.get(u)?['status'] != 'IN_STORE') {
-        throw 'A selected unit is not in store';
+        throw tr('A selected unit is not in store');
       }
     }
     final stored = [
@@ -272,7 +311,7 @@ class Db {
           'type_name': types.get(l['type_id'])?['name'],
           'unit_ids': l['unit_ids'],
           'sns': [
-            for (final u in l['unit_ids'] as List<String>) units.get(u)!['sn'],
+            for (final u in l['unit_ids'] as List<String>) label(units.get(u)!),
           ],
           'acc': l['acc'],
         },
@@ -322,7 +361,7 @@ class Db {
     String? backFromId,
     String? backToId,
   }) async {
-    if (note.trim().isEmpty) throw 'Description is required';
+    if (note.trim().isEmpty) throw tr('Description is required');
     final log = logs.get(id)!;
     final closed = log['back_from_id'] != null;
     await logs.put(id, {

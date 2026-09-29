@@ -6,6 +6,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'data.dart';
+import 'lang.dart';
 import 'picker.dart';
 import 'theme.dart';
 
@@ -61,10 +62,10 @@ Future<bool> deletePerson(BuildContext c, String id) async {
   final refs = Db.personRefs(id);
   final ok = await confirmDelete(
     c,
-    'Delete ${Db.name(id)}?',
+    '${tr('Delete')} ${Db.name(id)}?',
     warning: refs == 0
         ? null
-        : 'Named in $refs log(s). They will show "(deleted)" there.',
+        : tr('Named in {} log(s). They will show "(deleted)" there.').replaceFirst('{}', '$refs'),
   );
   if (!ok || !c.mounted) return false;
   return runGuarded(c, () => Db.deletePerson(id));
@@ -85,7 +86,7 @@ class _PersonelScreenState extends State<PersonelScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('REDLINE // PERSONNEL')),
+      appBar: AppBar(title: Text('REDLINE // ${tr('PERSONNEL')}')),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.push(
           context,
@@ -119,7 +120,7 @@ class _PersonelScreenState extends State<PersonelScreen> {
                             ),
                       );
                 if (rows.isEmpty)
-                  return const Center(child: Text('EMPTY', style: kLabel));
+                  return Center(child: Text(tr('EMPTY'), style: kLabel));
                 return ListView.separated(
                   padding: const EdgeInsets.only(bottom: 88),
                   itemCount: rows.length,
@@ -135,7 +136,7 @@ class _PersonelScreenState extends State<PersonelScreen> {
                       ),
                       title: Text(p['name'], style: kBold),
                       subtitle: Text(
-                        'NRP: ${p['nrp'] ?? '-'}  |  UNIT: ${p['satuan_kerja'] ?? '-'}',
+                        'NRP: ${p['nrp'] ?? '-'}  |  ${tr('UNIT')}: ${p['satuan_kerja'] ?? '-'}',
                         style: kLabel,
                       ),
                       trailing: actionButtons(
@@ -177,7 +178,7 @@ class PersonDetail extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: kLabel),
+        Text(tr(label), style: kLabel),
         Text(
           (v == null || '$v'.isEmpty) ? '-' : '$v',
           style: const TextStyle(fontSize: 16),
@@ -224,7 +225,7 @@ class PersonDetail extends StatelessWidget {
                 Center(
                   child: TextButton(
                     onPressed: () => _viewPhoto(context, p['name'], photo),
-                    child: const Text('VIEW PHOTO'),
+                    child: Text(tr('VIEW PHOTO')),
                   ),
                 ),
               const SizedBox(height: 20),
@@ -279,15 +280,15 @@ class _PersonFormState extends State<PersonForm> {
     final src = await showDialog<ImageSource>(
       context: context,
       builder: (c) => SimpleDialog(
-        title: const Text('PHOTO'),
+        title: Text(tr('PHOTO')),
         children: [
           SimpleDialogOption(
             onPressed: () => Navigator.pop(c, ImageSource.camera),
-            child: const Text('CAMERA'),
+            child: Text(tr('CAMERA')),
           ),
           SimpleDialogOption(
             onPressed: () => Navigator.pop(c, ImageSource.gallery),
-            child: const Text('GALLERY'),
+            child: Text(tr('GALLERY')),
           ),
         ],
       ),
@@ -328,14 +329,14 @@ class _PersonFormState extends State<PersonForm> {
       TextField(
         controller: c,
         keyboardType: type,
-        decoration: InputDecoration(labelText: label),
+        decoration: InputDecoration(labelText: tr(label)),
       );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.id == null ? 'NEW PERSON' : 'EDIT PERSON'),
+        title: Text(tr(widget.id == null ? 'NEW PERSON' : 'EDIT PERSON')),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -353,8 +354,8 @@ class _PersonFormState extends State<PersonForm> {
                 onPressed: _pickPhoto,
                 child: Text(
                   _photo == null
-                      ? 'ADD PHOTO'
-                      : 'CHANGE PHOTO (${(_photo!.length / 1024).round()} KB)',
+                      ? tr('ADD PHOTO')
+                      : '${tr('CHANGE PHOTO')} (${(_photo!.length / 1024).round()} KB)',
                 ),
               ),
               if (_photo != null)
@@ -364,7 +365,7 @@ class _PersonFormState extends State<PersonForm> {
                     _name.text.isEmpty ? 'PHOTO' : _name.text,
                     _photo,
                   ),
-                  child: const Text('VIEW'),
+                  child: Text(tr('VIEW')),
                 ),
             ],
           ),
@@ -373,7 +374,7 @@ class _PersonFormState extends State<PersonForm> {
           _field(_unit, 'Unit'),
           _field(_phone, 'Phone number', TextInputType.phone),
           const SizedBox(height: 24),
-          FilledButton(onPressed: _save, child: const Text('SAVE')),
+          FilledButton(onPressed: _save, child: Text(tr('SAVE'))),
         ],
       ),
     );
@@ -421,9 +422,9 @@ class PersonField extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      title: Text(label, style: kLabel),
+      title: Text(tr(label), style: kLabel),
       subtitle: Text(
-        value == null ? 'TAP TO SELECT' : Db.name(value),
+        value == null ? tr('TAP TO SELECT') : Db.name(value),
         style: const TextStyle(fontSize: 15),
       ),
       trailing: const Icon(Icons.search),

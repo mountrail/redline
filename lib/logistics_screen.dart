@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'data.dart';
+import 'lang.dart';
 import 'personel_screen.dart';
 import 'picker.dart';
 import 'theme.dart';
@@ -19,7 +20,7 @@ String _num(Map m) => m['log_number'].toString().padLeft(3, '0');
 String _accText(Map acc) =>
     acc.entries.map((e) => '${e.key} x${e.value}').join(', ');
 
-String _units(int n) => '$n ${n == 1 ? 'unit' : 'units'}';
+String _units(int n) => '$n ${tr(n == 1 ? 'unit' : 'units')}';
 
 List<(String, Map)> _all(Box<Map> b) => [
   for (final e in b.toMap().entries) (e.key as String, e.value),
@@ -44,11 +45,11 @@ class LogisticsScreen extends StatelessWidget {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('REDLINE // LOGISTICS'),
-          bottom: const TabBar(
+          title: Text('REDLINE // ${tr('LOGISTICS')}'),
+          bottom: TabBar(
             tabs: [
-              Tab(text: 'LOG BOOK'),
-              Tab(text: 'ITEMS'),
+              Tab(text: tr('LOG BOOK')),
+              Tab(text: tr('ITEMS')),
             ],
           ),
         ),
@@ -110,7 +111,7 @@ Widget _tab({
         builder: (_, __) {
           final list = rows();
           if (list.isEmpty)
-            return const Center(child: Text('EMPTY', style: kLabel));
+            return Center(child: Text(tr('EMPTY'), style: kLabel));
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
             itemCount: list.length,
@@ -143,7 +144,7 @@ Widget _logRow(BuildContext c, String id, Map m) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'LOG ${_num(m)}  [${open ? 'OPEN' : 'CLOSED'}]',
+                'LOG ${_num(m)}  [${tr(open ? 'OPEN' : 'CLOSED')}]',
                 style: kBold,
               ),
               Text(_date(m['date']), style: kLabel),
@@ -152,7 +153,7 @@ Widget _logRow(BuildContext c, String id, Map m) {
               if (summary.isNotEmpty) Text(summary, style: kLabel),
               const SizedBox(height: 4),
               Text(
-                'OUT: ${Db.name(m['from_id'])} -> ${Db.name(m['to_id'])}',
+                '${tr('OUT')}: ${Db.name(m['from_id'])} -> ${Db.name(m['to_id'])}',
                 style: kLabel,
               ),
             ],
@@ -188,7 +189,7 @@ void _closeLog(BuildContext c, String id) {
       ],
     ),
     () async {
-      if (from == null || to == null) throw 'Pick both people';
+      if (from == null || to == null) throw tr('Pick both people');
       await Db.closeLog(id, from!, to!);
     },
   );
@@ -203,7 +204,7 @@ void _editLog(BuildContext c, String id) {
   final closed = backFrom != null;
   _dialog(
     c,
-    'EDIT LOG ${_num(m)}',
+    '${tr('EDIT LOG')} ${_num(m)}',
     (set) => Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -249,8 +250,8 @@ Future<bool> _deleteLog(BuildContext c, String id) async {
   final open = m['back_from_id'] == null;
   final ok = await confirmDelete(
     c,
-    'Delete LOG ${_num(m)}?',
-    warning: open ? 'Its units will go back to store.' : null,
+    '${tr('Delete')} LOG ${_num(m)}?',
+    warning: open ? tr('Its units will go back to store.') : null,
   );
   if (!ok || !c.mounted) return false;
   return runGuarded(c, () => Db.deleteLog(id));
@@ -268,12 +269,12 @@ String _logText(Map m) {
     final sns = Db.lineSns(l);
     final acc = l['acc'] as Map;
     b.writeln('\n${Db.lineName(l)} (${_units(sns.length)})');
-    b.writeln('Serial Number:');
+    b.writeln(tr('Serial Number:'));
     for (final s in sns) {
       b.writeln('* $s');
     }
     if (acc.isNotEmpty) {
-      b.writeln('\nAdditional:');
+      b.writeln('\n${tr('Additional:')}');
       for (final e in acc.entries) {
         b.writeln('* ${e.key} (${e.value})');
       }
@@ -281,21 +282,20 @@ String _logText(Map m) {
   }
   final old = _legacyAcc(m);
   if (old.isNotEmpty) {
-    b.writeln('\nAdditional:');
+    b.writeln('\n${tr('Additional:')}');
     for (final e in old.entries) {
       b.writeln('* ${e.key} (${e.value})');
     }
   }
-  b.writeln(
-    '\nOUT: diserahkan oleh ${Db.name(m['from_id'])} diterima oleh ${Db.name(m['to_id'])}.',
-  );
-  b.write(
-    m['back_from_id'] == null
-        ? 'IN: -'
-        : 'IN: diserahkan oleh ${Db.name(m['back_from_id'])} diterima oleh ${Db.name(m['back_to_id'])}.',
-  );
+  b.writeln('\n${_hand('OUT', m['from_id'], m['to_id'])}');
+  b.write(_hand('IN', m['back_from_id'], m['back_to_id']));
   return b.toString();
 }
+
+/// One plain-text handover line, in the current language.
+String _hand(String tag, String? from, String? to) => from == null
+    ? '${tr(tag)}: -'
+    : '${tr(tag)}: ${tr('handed over by')} ${Db.name(from)} ${tr('received by')} ${Db.name(to)}.';
 
 /// Underlined, tappable name that opens the person's info. Back returns here.
 InlineSpan _link(BuildContext c, String? id) {
@@ -321,13 +321,13 @@ InlineSpan _link(BuildContext c, String? id) {
 }
 
 Widget _handover(BuildContext c, String tag, String? from, String? to) {
-  if (from == null) return Text('$tag: -');
+  if (from == null) return Text('${tr(tag)}: -');
   return Text.rich(
     TextSpan(
       children: [
-        TextSpan(text: '$tag: diserahkan oleh '),
+        TextSpan(text: '${tr(tag)}: ${tr('handed over by')} '),
         _link(c, from),
-        const TextSpan(text: ' diterima oleh '),
+        TextSpan(text: ' ${tr('received by')} '),
         _link(c, to),
         const TextSpan(text: '.'),
       ],
@@ -339,7 +339,7 @@ Widget _bullets(String title, List<String> items) => Column(
   crossAxisAlignment: CrossAxisAlignment.start,
   children: [
     const SizedBox(height: 8),
-    Text(title),
+    Text(tr(title)),
     for (final s in items) Text('* $s'),
   ],
 );
@@ -369,11 +369,11 @@ class LogDetail extends StatelessWidget {
             actions: [
               IconButton(
                 icon: const Icon(Icons.copy, size: 20),
-                tooltip: 'Copy text',
+                tooltip: tr('Copy text'),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: _logText(m)));
                   ScaffoldMessenger.of(ctx)
-                      .showSnackBar(const SnackBar(content: Text('COPIED')));
+                      .showSnackBar(SnackBar(content: Text(tr('COPIED'))));
                 },
               ),
               actionButtons(
@@ -390,7 +390,7 @@ class LogDetail extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             children: [
               Text(
-                '[${open ? 'OPEN' : 'CLOSED'}]  ${_date(m['date'])}',
+                '[${tr(open ? 'OPEN' : 'CLOSED')}]  ${_date(m['date'])}',
                 style: kLabel,
               ),
               const SizedBox(height: 6),
@@ -419,12 +419,12 @@ class LogDetail extends StatelessWidget {
               const SizedBox(height: 6),
               _handover(ctx, 'IN', m['back_from_id'], m['back_to_id']),
               if (!open)
-                Text('RETURNED ${_date(m['back_date'])}', style: kLabel),
+                Text('${tr('RETURNED')} ${_date(m['back_date'])}', style: kLabel),
               if (open) ...[
                 const SizedBox(height: 24),
                 FilledButton(
                   onPressed: () => _closeLog(ctx, id),
-                  child: const Text('CLOSE LOG (RETURN)'),
+                  child: Text(tr('CLOSE LOG (RETURN)')),
                 ),
               ],
             ],
@@ -452,7 +452,7 @@ Widget _typeRow(BuildContext c, String id, Map m) {
             children: [
               Text(m['name'], style: kBold),
               Text(
-                'IN STORE ${Db.freeUnits(id).length} / $total',
+                '${tr('IN STORE')} ${Db.freeUnits(id).length} / $total',
                 style: kLabel,
               ),
             ],
@@ -476,8 +476,10 @@ Future<bool> _deleteType(BuildContext c, String id) async {
   final n = Db.units.values.where((u) => u['type_id'] == id).length;
   final ok = await confirmDelete(
     c,
-    'Delete "${t['name']}"?',
-    warning: n == 0 ? null : 'Its $n serial number(s) will be deleted too.',
+    '${tr('Delete')} "${t['name']}"?',
+    warning: n == 0
+        ? null
+        : tr('Its {} serial number(s) will be deleted too.').replaceFirst('{}', '$n'),
   );
   if (!ok || !c.mounted) return false;
   return runGuarded(c, () => Db.deleteType(id));
@@ -494,7 +496,7 @@ Future<String?> pickType(BuildContext c) => Navigator.push<String>(
           (
             e.key as String,
             e.value['name'] as String,
-            'IN STORE: ${Db.freeUnits(e.key as String).length}',
+            '${tr('IN STORE')}: ${Db.freeUnits(e.key as String).length}',
           ),
       ],
       onAdd: (ctx, q) => Navigator.push<String>(
@@ -511,19 +513,31 @@ Future<void> _addItem(BuildContext c) async {
   if (typeId != null && c.mounted) await addSn(c, typeId);
 }
 
+/// Add units of an item: serial numbers (comma separated) and/or a quantity
+/// of units without one (they show as #1, #2, ... until a serial is set).
 Future<void> addSn(BuildContext c, String typeId) {
   final ctl = TextEditingController();
+  final blank = TextEditingController();
   return _dialog(
     c,
-    'ADD SERIAL NUMBERS',
+    'ADD UNITS',
     (_) => Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(Db.types.get(typeId)!['name'], style: kBold),
         _field(ctl, 'Serial numbers (comma separated)'),
+        _field(
+          blank,
+          'Or quantity without serial number',
+          type: TextInputType.number,
+        ),
       ],
     ),
-    () => Db.addUnits(typeId, ctl.text.split(',')),
+    () => Db.addUnits(
+      typeId,
+      ctl.text.split(','),
+      blank: int.tryParse(blank.text.trim()) ?? 0,
+    ),
   );
 }
 
@@ -532,7 +546,7 @@ void _editUnit(BuildContext c, String unitId) {
   _dialog(
     c,
     'EDIT SERIAL NUMBER',
-    (_) => _field(ctl, 'Serial number'),
+    (_) => _field(ctl, 'Serial number', hint: 'Empty = no serial number'),
     () => Db.updateUnit(unitId, ctl.text),
   );
 }
@@ -540,7 +554,7 @@ void _editUnit(BuildContext c, String unitId) {
 Future<void> _deleteUnit(BuildContext c, String unitId) async {
   final u = Db.units.get(unitId);
   if (u == null) return;
-  if (!await confirmDelete(c, 'Delete serial number "${u['sn']}"?')) return;
+  if (!await confirmDelete(c, '${tr('Delete')} "${Db.label(u)}"?')) return;
   if (c.mounted) await runGuarded(c, () => Db.deleteUnit(unitId));
 }
 
@@ -556,7 +570,7 @@ void _editAcc(BuildContext c, String typeId, {int? index}) {
     (_) => _field(ctl, 'Additional item', hint: 'e.g. Clipper'),
     () async {
       final v = ctl.text.trim();
-      if (v.isEmpty) throw 'Name is required';
+      if (v.isEmpty) throw tr('Name is required');
       if (index == null) {
         list.add(v);
       } else {
@@ -571,7 +585,7 @@ Future<void> _deleteAcc(BuildContext c, String typeId, int index) async {
   final list = List<String>.from(
     Db.types.get(typeId)!['accessories'] ?? const [],
   );
-  if (!await confirmDelete(c, 'Delete additional item "${list[index]}"?')) {
+  if (!await confirmDelete(c, '${tr('Delete additional item')} "${list[index]}"?')) {
     return;
   }
   list.removeAt(index);
@@ -601,11 +615,7 @@ class TypeScreen extends StatelessWidget {
                 .entries
                 .where((e) => e.value['type_id'] == typeId)
                 .toList()
-              ..sort(
-                (a, b) => a.value['sn'].toString().compareTo(
-                  b.value['sn'].toString(),
-                ),
-              );
+              ..sort((a, b) => Db.cmpUnit(a.value, b.value));
         return Scaffold(
           appBar: AppBar(
             title: Text(t['name']),
@@ -632,17 +642,17 @@ class TypeScreen extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Expanded(
-                    child: Text('ADDITIONAL ITEMS', style: kLabel),
+                  Expanded(
+                    child: Text(tr('ADDITIONAL ITEMS'), style: kLabel),
                   ),
                   TextButton.icon(
                     onPressed: () => _editAcc(ctx, typeId),
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('ADD'),
+                    label: Text(tr('ADD')),
                   ),
                 ],
               ),
-              if (acc.isEmpty) const Text('NONE', style: kLabel),
+              if (acc.isEmpty) Text(tr('NONE'), style: kLabel),
               for (var i = 0; i < acc.length; i++)
                 Row(
                   children: [
@@ -654,16 +664,16 @@ class TypeScreen extends StatelessWidget {
                   ],
                 ),
               const Divider(height: 28),
-              const Text('SERIAL NUMBERS', style: kLabel),
+              Text(tr('UNITS'), style: kLabel),
               const SizedBox(height: 4),
               if (list.isEmpty)
-                const Text('NO SERIAL NUMBERS YET', style: kLabel),
+                Text(tr('NO UNITS YET'), style: kLabel),
               for (final e in list)
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        '${e.value['sn']}   ${e.value['status'] == 'OUT' ? 'OUT -> ${Db.name(e.value['holder_id'])}' : 'IN STORE'}',
+                        '${Db.label(e.value)}   ${e.value['status'] == 'OUT' ? '${tr('OUT')} -> ${Db.name(e.value['holder_id'])}' : tr('IN STORE')}',
                       ),
                     ),
                     actionButtons(
@@ -725,20 +735,20 @@ class _TypeFormState extends State<TypeForm> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.id == null ? 'NEW ITEM' : 'EDIT ITEM')),
+      appBar: AppBar(title: Text(tr(widget.id == null ? 'NEW ITEM' : 'EDIT ITEM'))),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           _field(_name, 'Item name'),
           const SizedBox(height: 16),
-          const Text('ADDITIONAL ITEMS', style: kLabel),
+          Text(tr('ADDITIONAL ITEMS'), style: kLabel),
           for (var i = 0; i < _acc.length; i++)
             Row(
               children: [
                 Expanded(
                   child: _field(
                     _acc[i],
-                    'Additional item #${i + 1}',
+                    '${tr('Additional item')} #${i + 1}',
                     hint: 'e.g. Clipper',
                   ),
                 ),
@@ -751,10 +761,10 @@ class _TypeFormState extends State<TypeForm> {
           TextButton.icon(
             onPressed: () => setState(() => _acc.add(TextEditingController())),
             icon: const Icon(Icons.add),
-            label: const Text('ADDITIONAL ITEM'),
+            label: Text(tr('ADDITIONAL ITEM')),
           ),
           const SizedBox(height: 24),
-          FilledButton(onPressed: _save, child: const Text('SAVE')),
+          FilledButton(onPressed: _save, child: Text(tr('SAVE'))),
         ],
       ),
     );
@@ -806,7 +816,7 @@ class _NewLogScreenState extends State<NewLogScreen> {
           _from == null ||
           _to == null ||
           _lines.isEmpty) {
-        throw 'Fill in the description, both people and at least one item';
+        throw tr('Fill in the description, both people and at least one item');
       }
       // Same item added twice -> one block in the log.
       final units = <String, List<String>>{};
@@ -834,7 +844,7 @@ class _NewLogScreenState extends State<NewLogScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('NEW LOG')),
+      appBar: AppBar(title: Text(tr('NEW LOG'))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -850,7 +860,7 @@ class _NewLogScreenState extends State<NewLogScreen> {
             onPicked: (v) => setState(() => _to = v),
           ),
           const Divider(height: 24),
-          const Text('ITEMS OUT', style: kLabel),
+          Text(tr('ITEMS OUT'), style: kLabel),
           for (var i = 0; i < _lines.length; i++)
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -866,10 +876,10 @@ class _NewLogScreenState extends State<NewLogScreen> {
           TextButton.icon(
             onPressed: _addLine,
             icon: const Icon(Icons.add),
-            label: const Text('ADD ITEM'),
+            label: Text(tr('ADD ITEM')),
           ),
           const SizedBox(height: 16),
-          FilledButton(onPressed: _save, child: const Text('SAVE LOG')),
+          FilledButton(onPressed: _save, child: Text(tr('SAVE LOG'))),
         ],
       ),
     );
@@ -961,16 +971,16 @@ class _TakeScreenState extends State<TakeScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('IN STORE: ${_free.length}', style: kLabel),
+          Text('${tr('IN STORE')}: ${_free.length}', style: kLabel),
           if (_free.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('NO UNITS IN STORE. ADD SERIAL NUMBERS FIRST.'),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(tr('NO UNITS IN STORE. ADD UNITS FIRST.')),
             )
           else ...[
             Row(
               children: [
-                const Text('HOW MANY'),
+                Text(tr('HOW MANY')),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.remove),
@@ -1001,17 +1011,17 @@ class _TakeScreenState extends State<TakeScreen> {
                 ),
                 TextButton(
                   onPressed: () => _setQty(_free.length),
-                  child: const Text('ALL'),
+                  child: Text(tr('ALL')),
                 ),
               ],
             ),
             const Divider(),
-            Text('PICK SERIAL NUMBERS (${_sel.length}/$_qty)', style: kLabel),
+            Text('${tr('PICK UNITS')} (${_sel.length}/$_qty)', style: kLabel),
             for (final e in _free)
               CheckboxListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                title: Text(e.value['sn']),
+                title: Text(Db.label(e.value)),
                 value: _sel.contains(e.key),
                 onChanged: (v) => setState(() {
                   final id = e.key as String;
@@ -1025,12 +1035,12 @@ class _TakeScreenState extends State<TakeScreen> {
           ],
           if (_names.isNotEmpty) ...[
             const Divider(height: 24),
-            const Text('ADDITIONAL ITEMS', style: kLabel),
+            Text(tr('ADDITIONAL ITEMS'), style: kLabel),
             CheckboxListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: Text('ALL ADDITIONAL ITEMS FOR EVERY UNIT (x$_qty)'),
+              title: Text('${tr('ALL ADDITIONAL ITEMS FOR EVERY UNIT')} (x$_qty)'),
               value: allOn,
               onChanged: (v) => setState(() {
                 if (v == true) {
@@ -1077,7 +1087,7 @@ class _TakeScreenState extends State<TakeScreen> {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     controlAffinity: ListTileControlAffinity.leading,
-                    title: Text('EVERY UNIT HAS THIS (x$_qty)', style: kLabel),
+                    title: Text('${tr('EVERY UNIT HAS THIS')} (x$_qty)', style: kLabel),
                     value: _each.contains(n),
                     onChanged: (v) => setState(
                       () => v == true ? _each.add(n) : _each.remove(n),
@@ -1089,7 +1099,7 @@ class _TakeScreenState extends State<TakeScreen> {
           const SizedBox(height: 16),
           FilledButton(
             onPressed: ready ? _confirm : null,
-            child: const Text('CONFIRM'),
+            child: Text(tr('CONFIRM')),
           ),
         ],
       ),
@@ -1099,11 +1109,19 @@ class _TakeScreenState extends State<TakeScreen> {
 
 // ============================================================== helpers
 
-Widget _field(TextEditingController c, String label, {String? hint}) =>
-    TextField(
-      controller: c,
-      decoration: InputDecoration(labelText: label, hintText: hint),
-    );
+Widget _field(
+  TextEditingController c,
+  String label, {
+  String? hint,
+  TextInputType? type,
+}) => TextField(
+  controller: c,
+  keyboardType: type,
+  decoration: InputDecoration(
+    labelText: tr(label),
+    hintText: hint == null ? null : tr(hint),
+  ),
+);
 
 /// Small popup for quick actions (close log, add/edit serial numbers...).
 /// Anything with search or several steps is a full screen instead.
@@ -1117,12 +1135,12 @@ Future<void> _dialog(
     context: c,
     builder: (_) => StatefulBuilder(
       builder: (ctx, set) => AlertDialog(
-        title: Text(title),
+        title: Text(tr(title)),
         content: SingleChildScrollView(child: body(set)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
+            child: Text(tr('CANCEL')),
           ),
           TextButton(
             child: const Text('OK'),
